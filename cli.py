@@ -49,11 +49,12 @@ def main():
 
     engine = ChatEngine()
 
-    # Auto-ingest transcripts if the store is empty
-    if not engine.list_calls().startswith("Ingested"):
-        console.print("[yellow]No calls found — auto-ingesting transcripts...[/yellow]")
-        messages = engine.auto_ingest()
-        for msg in messages:
+    # Auto-ingest any new transcripts from the transcripts/ folder
+    messages = engine.auto_ingest()
+    new_messages = [m for m in messages if m.startswith("Ingested")]
+    if new_messages:
+        console.print(f"[yellow]Auto-ingesting {len(new_messages)} new transcript(s)...[/yellow]")
+        for msg in new_messages:
             console.print(f"  {msg}")
         console.print()
 
