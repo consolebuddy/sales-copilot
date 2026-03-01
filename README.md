@@ -10,13 +10,24 @@ A RAG-based CLI chatbot that ingests sales call transcripts, stores them with ve
 │ (cli.py) │     │ (orchestrator)│     │            │     │ (vectors)│
 └──────────┘     └──────┬───────┘     └────────────┘     └──────────┘
                         │
-                        ▼
-                 ┌──────────────┐
-                 │  LLM Client  │──▶ OpenAI GPT-4o-mini
-                 └──────────────┘
+                   ┌────┴─────┐
+                   │ LLM Client│──▶ OpenAI GPT-4o-mini
+                   └────┬─────┘
+                        │
+                ┌───────┴────────┐
+                │ Intent Router  │  (OpenAI function calling)
+                │ ─ list_calls   │
+                │ ─ ingest       │
+                │ ─ delete_call  │
+                │ ─ summarize    │
+                │ ─ sentiment    │
+                │ ─ question     │
+                └────────────────┘
 ```
 
-**Data flow:** Transcript files → Parser → Chunker → Embeddings → ChromaDB → Retrieval → LLM → Response with citations
+**Data flow:**
+1. **Ingestion:** Transcript files → Parser → Chunker → Embeddings → ChromaDB
+2. **Query:** User input → LLM Intent Router → Action handler → (for RAG: Retrieval → LLM) → Response with citations
 
 ## Setup
 
@@ -46,18 +57,37 @@ cp .env.example .env
 python cli.py
 ```
 
-On first run, the chatbot auto-ingests all transcripts from the `transcripts/` folder.
+On every startup, the chatbot scans the `transcripts/` folder and auto-ingests any new transcript files. Previously ingested calls are skipped, so you can simply drop new `.txt` files into the folder.
 
 ### Example Commands
 
 | Command | Description |
 |---------|-------------|
-| `list my call ids` | Show all ingested calls |
+| `list my call ids` | Show all ingested calls with count |
+| `tell me total number of calls done` | Same — any natural phrasing works |
 | `summarise call 1` | Summarize a specific call |
 | `What pricing was discussed?` | Free-form Q&A across all calls |
 | `Give me all negative comments when pricing was mentioned` | Sentiment-aware query |
-| `ingest path/to/new_call.txt` | Add a new transcript |
+| `ingest a new call transcript from ./transcripts/call_5.txt` | Add a new transcript |
+| `delete call 5` | Remove a call from the store |
 | `exit` | Quit the chatbot |
+
+All commands are understood via natural language — there are no rigid keywords to memorize.
+
+### How Intent Routing Works
+
+Instead of brittle regex matching, the chatbot uses **OpenAI function calling** to classify every user message into one of six actions:
+
+| Action | When it triggers |
+|--------|-----------------|
+| `list_calls` | "list calls", "how many calls", "show transcripts", etc. |
+| `ingest` | "ingest ...", "add a transcript from ...", "load ..." |
+| `delete_call` | "delete call 5", "remove transcript 3", etc. |
+| `summarize` | "summarise call 1", "recap", "give me an overview", etc. |
+| `sentiment` | "negative comments", "objections", "concerns about pricing", etc. |
+| `question` | Any other question about the call content |
+
+The router also extracts structured parameters (`call_id`, `file_path`) so the engine can act precisely.
 
 ## Design Decisions
 
@@ -84,8 +114,15 @@ Each transcript is parsed into dialogue turns, then grouped into **overlapping c
 ### Prompt Engineering
 
 - **System prompt** enforces citation format `[Call #id, start-end]`
-- **Intent detection** routes to specialized prompts (summary, sentiment, QA) for better responses
+- **Specialized prompts** for summary, sentiment, and QA modes produce higher-quality, focused responses
 - **Context injection** includes segment headers with call metadata so the LLM can cite accurately
+
+### Transcript Parser
+
+- Regex-based parser for the `[MM:SS] Role (Name – Title):  Text` format
+- Filters out stage directions (e.g., `*Call ends.*`, `SE (reads on-screen)`) from dialogue turns
+- Infers call type (Demo, Pricing, Objection Handling, Negotiation) from filename or content keywords
+- Deduplicates participants by name with clean display labels
 
 ### Assumptions
 
@@ -97,10 +134,10 @@ Each transcript is parsed into dialogue turns, then grouped into **overlapping c
 ## Testing
 
 ```bash
-pytest tests/ -v
+python -m pytest tests/ -v
 ```
 
-Tests cover:
+20 tests covering:
 - Transcript parsing (turn count, speaker/role extraction, timestamps, stage directions)
 - Chunking (overlap, token limits, metadata, edge cases)
 - Parser-chunker integration
@@ -109,11 +146,11 @@ Tests cover:
 
 ```
 sales-copilot/
-├── cli.py                     # Entry point
+├── cli.py                     # Entry point — REPL with auto-ingestion
 ├── config.py                  # Environment configuration
 ├── requirements.txt
 ├── .env.example
-├── transcripts/               # Sample call transcripts
+├── transcripts/               # Drop transcript .txt files here
 │   ├── call_1.txt             # Demo call
 │   ├── call_2.txt             # Pricing call
 │   ├── call_3.txt             # Objection handling call
@@ -127,8 +164,8 @@ sales-copilot/
 │   ├── retrieval/
 │   │   └── retriever.py       # Similarity search + context formatting
 │   ├── llm/
-│   │   ├── client.py          # OpenAI API wrapper
-│   │   └── prompts.py         # Prompt templates
+│   │   ├── client.py          # OpenAI wrapper + intent router (function calling)
+│   │   └── prompts.py         # Prompt templates (QA, summary, sentiment)
 │   └── chatbot/
 │       └── engine.py          # Query orchestrator
 └── tests/
