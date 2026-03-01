@@ -3,6 +3,7 @@
 
 import sys
 import os
+import io
 
 # Ensure project root is on sys.path so `import config` / `import src.*` work
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -14,6 +15,11 @@ if os.environ.get("SSL_CERT_FILE") and not os.path.exists(os.environ["SSL_CERT_F
         os.environ["SSL_CERT_FILE"] = certifi.where()
     except ImportError:
         del os.environ["SSL_CERT_FILE"]
+
+# Force UTF-8 on Windows so Unicode symbols (₹, —, etc.) render correctly
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 from rich.console import Console
 from rich.panel import Panel
