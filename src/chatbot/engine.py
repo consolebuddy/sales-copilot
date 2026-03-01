@@ -105,7 +105,7 @@ class ChatEngine:
             return self.ingest(path)
 
         # ── Intent: delete call ──────────────────────────────────
-        delete_match = re.search(r"\bdelete\b.*\bcall\s*#?(\d+)", lower)
+        delete_match = re.search(r"\b(?:delete|remove)\b.*\b(?:call|transcript)\s*[_#]?(\d+)", lower)
         if delete_match:
             call_id = delete_match.group(1)
             count = self._store.delete_call(call_id)
