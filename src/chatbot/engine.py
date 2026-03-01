@@ -89,12 +89,20 @@ class ChatEngine:
 
         # ── Intent: ingest ───────────────────────────────────────
         ingest_match = re.search(
-            r"\b(?:ingest|add|import|load)\b.*?(?:from\s+)?([\"']?)(.+?)\1\s*$",
+            r"\b(?:ingest|add|import|load)\b.*?(?:from\s+)([\"']?)(\S+\.txt)\1\s*$",
             text,
             re.IGNORECASE,
         )
-        if ingest_match and os.path.isfile(ingest_match.group(2).strip()):
-            return self.ingest(ingest_match.group(2).strip())
+        if not ingest_match:
+            # Also match: "ingest ./transcripts/call_5.txt" (no "from")
+            ingest_match = re.search(
+                r"\b(?:ingest|add|import|load)\b\s+([\"']?)(\S+\.txt)\1\s*$",
+                text,
+                re.IGNORECASE,
+            )
+        if ingest_match:
+            path = ingest_match.group(2).strip()
+            return self.ingest(path)
 
         # ── Intent: delete call ──────────────────────────────────
         delete_match = re.search(r"\bdelete\b.*\bcall\s*#?(\d+)", lower)
