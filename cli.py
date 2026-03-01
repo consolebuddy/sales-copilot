@@ -7,6 +7,14 @@ import os
 # Ensure project root is on sys.path so `import config` / `import src.*` work
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Fix SSL cert path for conda environments where SSL_CERT_FILE may be stale
+if os.environ.get("SSL_CERT_FILE") and not os.path.exists(os.environ["SSL_CERT_FILE"]):
+    try:
+        import certifi
+        os.environ["SSL_CERT_FILE"] = certifi.where()
+    except ImportError:
+        del os.environ["SSL_CERT_FILE"]
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
