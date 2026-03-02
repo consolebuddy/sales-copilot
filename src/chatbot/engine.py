@@ -86,14 +86,22 @@ class ChatEngine:
 
     def process_query(self, user_input: str) -> str:
         """Use LLM to classify intent, then route to the appropriate handler."""
-        route = self._llm.route_query(user_input)
+        actions = self._llm.route_query(user_input)
 
+        results = []
+        for route in actions:
+            result = self._execute_action(route)
+            results.append(result)
+
+        return "\n\n".join(results)
+
+    def _execute_action(self, route: dict) -> str:
+        """Execute a single routed action."""
         action = route.get("action", "question")
         call_ids = route.get("call_ids") or []
         file_paths = route.get("file_paths") or []
-        query = route.get("query", user_input)
+        query = route.get("query", "")
 
-        # First call_id for single-call operations (RAG filtering)
         call_id = call_ids[0] if call_ids else None
 
         if action == "list_calls":
@@ -102,14 +110,14 @@ class ChatEngine:
         if action == "ingest":
             if not file_paths:
                 return "Please specify a file path (e.g. 'ingest ./transcripts/call_5.txt')."
-            results = [self.ingest(p) for p in file_paths]
-            return "\n\n".join(results)
+            parts = [self.ingest(p) for p in file_paths]
+            return "\n\n".join(parts)
 
         if action == "delete_call":
             if not call_ids:
                 return "Please specify which call to delete (e.g. 'delete call 5')."
-            results = [self.delete_call(cid) for cid in call_ids]
-            return "\n".join(results)
+            parts = [self.delete_call(cid) for cid in call_ids]
+            return "\n".join(parts)
 
         if action == "summarize":
             return self._rag_query(

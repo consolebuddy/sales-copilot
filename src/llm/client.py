@@ -33,23 +33,24 @@ class LLMClient:
         except APIError as e:
             return f"Error: OpenAI API error — {e.message}"
 
-    def route_query(self, user_input: str) -> dict:
+    def route_query(self, user_input: str) -> list[dict]:
         """Use function calling to classify intent and extract parameters.
 
-        Returns a dict like:
-            {"action": "list_calls"}
-            {"action": "ingest", "file_path": "./transcripts/call_5.txt"}
-            {"action": "delete_call", "call_id": "5"}
-            {"action": "summarize", "query": "...", "call_id": "1"}
-            {"action": "sentiment", "query": "...", "call_id": null}
-            {"action": "question", "query": "...", "call_id": null}
+        Returns a list of action dicts. A single message may produce multiple
+        actions (e.g. "ingest call 5 and delete call 3" -> two actions).
+
+        Each dict has: action, call_ids, file_paths, query.
         """
         tools = [
             {
                 "type": "function",
                 "function": {
                     "name": "route_intent",
-                    "description": "Classify the user's intent and extract parameters.",
+                    "description": (
+                        "Route ONE user intent. If the user's message contains "
+                        "multiple distinct intents (e.g. 'ingest X and also delete Y'), "
+                        "call this function once per intent."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -75,7 +76,7 @@ class LLMClient:
                             "call_ids": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "List of numeric call IDs the user references (e.g. 'call 1 and call 6' -> ['1', '6'], 'call_3' -> ['3']). Empty array if no specific call.",
+                                "description": "List of numeric call IDs for this action (e.g. 'call 1 and call 6' -> ['1', '6']). Empty array if no specific call.",
                             },
                             "file_paths": {
                                 "type": "array",
@@ -95,8 +96,9 @@ class LLMClient:
 
         system = (
             "You are a query router for a sales call transcript chatbot. "
-            "Analyze the user's message and call the route_intent function "
-            "with the correct action and parameters. "
+            "Analyze the user's message and call the route_intent function. "
+            "If the message contains MULTIPLE distinct intents (e.g. 'add X and delete Y'), "
+            "call route_intent ONCE PER INTENT — do not merge them into one call. "
             "Be precise about extracting call IDs and file paths."
         )
 
@@ -108,13 +110,14 @@ class LLMClient:
                     {"role": "user", "content": user_input},
                 ],
                 tools=tools,
-                tool_choice={"type": "function", "function": {"name": "route_intent"}},
+                tool_choice="required",
                 temperature=0,
             )
 
-            tool_call = response.choices[0].message.tool_calls[0]
-            return json.loads(tool_call.function.arguments)
+            actions = []
+            for tool_call in response.choices[0].message.tool_calls:
+                actions.append(json.loads(tool_call.function.arguments))
+            return actions if actions else [{"action": "question", "query": user_input}]
 
         except (RateLimitError, APIError, Exception):
-            # Fallback: treat as a general question
-            return {"action": "question", "query": user_input}
+            return [{"action": "question", "query": user_input}]
