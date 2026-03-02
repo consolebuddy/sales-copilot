@@ -89,21 +89,27 @@ class ChatEngine:
         route = self._llm.route_query(user_input)
 
         action = route.get("action", "question")
-        call_id = route.get("call_id")
-        file_path = route.get("file_path")
+        call_ids = route.get("call_ids") or []
+        file_paths = route.get("file_paths") or []
         query = route.get("query", user_input)
+
+        # First call_id for single-call operations (RAG filtering)
+        call_id = call_ids[0] if call_ids else None
 
         if action == "list_calls":
             return self.list_calls()
 
         if action == "ingest":
-            path = file_path or ""
-            return self.ingest(path)
+            if not file_paths:
+                return "Please specify a file path (e.g. 'ingest ./transcripts/call_5.txt')."
+            results = [self.ingest(p) for p in file_paths]
+            return "\n\n".join(results)
 
         if action == "delete_call":
-            if not call_id:
+            if not call_ids:
                 return "Please specify which call to delete (e.g. 'delete call 5')."
-            return self.delete_call(call_id)
+            results = [self.delete_call(cid) for cid in call_ids]
+            return "\n".join(results)
 
         if action == "summarize":
             return self._rag_query(

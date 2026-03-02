@@ -72,13 +72,15 @@ class LLMClient:
                                     "question: any other question about the call transcripts."
                                 ),
                             },
-                            "call_id": {
-                                "type": ["string", "null"],
-                                "description": "The numeric call ID if the user references a specific call (e.g. 'call 5' -> '5', 'call_3' -> '3'). Null if no specific call.",
+                            "call_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of numeric call IDs the user references (e.g. 'call 1 and call 6' -> ['1', '6'], 'call_3' -> ['3']). Empty array if no specific call.",
                             },
-                            "file_path": {
-                                "type": ["string", "null"],
-                                "description": "File path for ingest action. Extract the exact path the user provided. Null if not applicable.",
+                            "file_paths": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of file paths for ingest action. Extract the exact paths the user provided. Empty array if not applicable.",
                             },
                             "query": {
                                 "type": "string",
