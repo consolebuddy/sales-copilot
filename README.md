@@ -2,6 +2,12 @@
 
 A RAG-based CLI chatbot that ingests sales call transcripts, stores them with vector embeddings in ChromaDB, and lets users ask natural-language questions with source-cited answers.
 
+## Demo
+
+[![Demo Video](https://img.youtube.com/vi/w5eqD3CoxeM/maxresdefault.jpg)](https://youtu.be/w5eqD3CoxeM)
+
+> Click the image above to watch the demo on YouTube, or see the full video in [`Demo Video.mp4`](./Demo%20Video.mp4).
+
 ## Architecture
 
 ```
