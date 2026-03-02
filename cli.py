@@ -33,12 +33,16 @@ BANNER = """\
 [bold cyan]Sales Call AI Copilot[/bold cyan]
 [dim]RAG-powered assistant for sales call transcripts[/dim]
 
-Commands you can try:
-  [green]list my call ids[/green]          — show ingested calls
-  [green]summarise call 1[/green]          — summarise a specific call
-  [green]What pricing was discussed?[/green] — ask any question
-  [green]ingest <path>[/green]             — add a new transcript
-  [green]exit[/green]                      — quit
+[bold]Try these commands:[/bold]
+
+ [dim]List[/dim]       [green]list my call ids[/green]
+ [dim]Summary[/dim]    [green]summarise call 1[/green]
+ [dim]Q&A[/dim]        [green]What pricing was discussed?[/green]
+ [dim]Sentiment[/dim]  [green]Give me all negative comments when pricing was mentioned[/green]
+ [dim]Ingest[/dim]     [green]ingest a transcript from ./transcripts/call_5.txt[/green]
+ [dim]Delete[/dim]     [green]delete call 3 and call 4[/green]
+ [dim]Multi[/dim]      [green]add call 5 from ./transcripts/call_5.txt and delete call 3[/green]
+ [dim]Quit[/dim]       [green]exit[/green]
 """
 
 EXIT_WORDS = {"exit", "quit", "bye", "q"}
