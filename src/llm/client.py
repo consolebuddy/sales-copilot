@@ -16,15 +16,23 @@ class LLMClient:
         system_prompt: str,
         user_prompt: str,
         temperature: float = 0.3,
+        history: list[dict] | None = None,
     ) -> str:
-        """Call the chat completion API and return the response text."""
+        """Call the chat completion API and return the response text.
+
+        If *history* is provided, it is injected between the system prompt and
+        the current user message so the LLM can resolve follow-up references
+        like "tell me more" or "what about the second point?".
+        """
         try:
+            messages = [{"role": "system", "content": system_prompt}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": user_prompt})
+
             response = self._client.chat.completions.create(
                 model=self._model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+                messages=messages,
                 temperature=temperature,
             )
             return response.choices[0].message.content or ""
@@ -33,7 +41,7 @@ class LLMClient:
         except APIError as e:
             return f"Error: OpenAI API error — {e.message}"
 
-    def route_query(self, user_input: str) -> list[dict]:
+    def route_query(self, user_input: str, history: list[dict] | None = None) -> list[dict]:
         """Use function calling to classify intent and extract parameters.
 
         Returns a list of action dicts. A single message may produce multiple
@@ -99,16 +107,20 @@ class LLMClient:
             "Analyze the user's message and call the route_intent function. "
             "If the message contains MULTIPLE distinct intents (e.g. 'add X and delete Y'), "
             "call route_intent ONCE PER INTENT — do not merge them into one call. "
-            "Be precise about extracting call IDs and file paths."
+            "Be precise about extracting call IDs and file paths. "
+            "Use the conversation history (if any) to resolve references like "
+            "'tell me more', 'that call', 'the same one', etc."
         )
+
+        messages = [{"role": "system", "content": system}]
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": user_input})
 
         try:
             response = self._client.chat.completions.create(
                 model=self._model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_input},
-                ],
+                messages=messages,
                 tools=tools,
                 tool_choice="required",
                 temperature=0,

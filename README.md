@@ -27,7 +27,7 @@ A RAG-based CLI chatbot that ingests sales call transcripts, stores them with ve
 
 **Data flow:**
 1. **Ingestion:** Transcript files → Parser → Chunker → Embeddings → ChromaDB
-2. **Query:** User input → LLM Intent Router → Action handler → (for RAG: Retrieval → LLM) → Response with citations
+2. **Query:** User input + Conversation History → LLM Intent Router → Action handler → (for RAG: Retrieval + History → LLM) → Response with citations
 
 ## Setup
 
@@ -111,6 +111,16 @@ Each transcript is parsed into dialogue turns, then grouped into **overlapping c
 
 **Why ChromaDB?** Lightweight, local-first, persistent, with built-in metadata filtering — ideal for a CLI tool without external infrastructure.
 
+### Conversation History
+
+The chatbot maintains a rolling conversation history (last 10 exchanges) so users can ask follow-up questions naturally:
+
+- **"summarise call 1"** → summary response
+- **"tell me more about the pricing part"** → the LLM uses history to understand "the pricing part" refers to call 1's summary
+- **"what about objections?"** → resolves "what about" from conversation context
+
+History is passed to both the intent router (so it can resolve references like "that call" or "the same one") and the LLM generation step (so RAG answers are contextually aware). The history is bounded to prevent token limit issues.
+
 ### Prompt Engineering
 
 - **System prompt** enforces citation format `[Call #id, start-end]`
@@ -137,7 +147,7 @@ Each transcript is parsed into dialogue turns, then grouped into **overlapping c
 python -m pytest tests/ -v
 ```
 
-90 tests covering:
+97 tests covering:
 
 | Area | Tests | Coverage |
 |------|-------|----------|
@@ -155,6 +165,7 @@ python -m pytest tests/ -v
 | Parser+chunker integration | 3 | End-to-end, type propagation, all turns covered |
 | Engine action routing | 13 | All 6 actions + edge cases + multi-action (mocked) |
 | Prompt templates | 4 | QA, summary, sentiment formatting, citation rules |
+| Conversation history | 7 | Growth, accumulation, trimming, pass-through to router & LLM, ordering |
 
 ## Project Structure
 

@@ -225,6 +225,7 @@ class TestEngineActionRouting:
         engine._store = MagicMock()
         engine._retriever = MagicMock()
         engine._llm = MagicMock()
+        engine._history = []
         return engine
 
     def test_list_calls_action(self):
@@ -378,3 +379,124 @@ class TestPromptTemplates:
         from src.llm.prompts import SYSTEM_PROMPT
         assert "cite" in SYSTEM_PROMPT.lower()
         assert "Call #" in SYSTEM_PROMPT
+
+
+# ── Conversation history ────────────────────────────────────────────
+
+class TestConversationHistory:
+    """Test that ChatEngine maintains and passes conversation history."""
+
+    def _make_engine_stub(self):
+        from unittest.mock import MagicMock
+        from src.chatbot.engine import ChatEngine
+
+        engine = object.__new__(ChatEngine)
+        engine._store = MagicMock()
+        engine._retriever = MagicMock()
+        engine._llm = MagicMock()
+        engine._history = []
+        return engine
+
+    def test_history_starts_empty(self):
+        engine = self._make_engine_stub()
+        assert engine._history == []
+
+    def test_history_grows_after_query(self):
+        engine = self._make_engine_stub()
+        engine._llm.route_query.return_value = [
+            {"action": "list_calls", "query": ""},
+        ]
+        engine._store.list_calls.return_value = []
+
+        engine.process_query("list calls")
+        assert len(engine._history) == 2
+        assert engine._history[0]["role"] == "user"
+        assert engine._history[0]["content"] == "list calls"
+        assert engine._history[1]["role"] == "assistant"
+
+    def test_history_accumulates(self):
+        engine = self._make_engine_stub()
+        engine._llm.route_query.return_value = [
+            {"action": "list_calls", "query": ""},
+        ]
+        engine._store.list_calls.return_value = []
+
+        engine.process_query("first message")
+        engine.process_query("second message")
+        assert len(engine._history) == 4
+        assert engine._history[2]["content"] == "second message"
+
+    def test_history_is_trimmed(self):
+        from src.chatbot.engine import MAX_HISTORY_TURNS
+
+        engine = self._make_engine_stub()
+        engine._llm.route_query.return_value = [
+            {"action": "list_calls", "query": ""},
+        ]
+        engine._store.list_calls.return_value = []
+
+        # Fill beyond limit
+        for i in range(MAX_HISTORY_TURNS + 5):
+            engine.process_query(f"message {i}")
+
+        assert len(engine._history) == MAX_HISTORY_TURNS * 2
+
+    def test_history_passed_to_route_query(self):
+        engine = self._make_engine_stub()
+        engine._llm.route_query.return_value = [
+            {"action": "list_calls", "query": ""},
+        ]
+        engine._store.list_calls.return_value = []
+
+        engine.process_query("first")
+
+        # After first query, history has 2 entries (user + assistant)
+        assert len(engine._history) == 2
+
+        engine.process_query("tell me more")
+
+        # route_query was called with a history keyword arg on the second call
+        second_call = engine._llm.route_query.call_args_list[1]
+        assert second_call.kwargs["history"] is not None
+        # History now has 4 entries (both exchanges)
+        assert len(engine._history) == 4
+
+    def test_history_passed_to_generate(self):
+        engine = self._make_engine_stub()
+        engine._llm.route_query.return_value = [
+            {"action": "question", "query": "What pricing?"},
+        ]
+        engine._retriever.retrieve.return_value = []
+        engine._retriever.format_context.return_value = "No results."
+        engine._llm.generate.return_value = "Answer."
+
+        # Seed history with one prior exchange
+        engine._history = [
+            {"role": "user", "content": "summarise call 1"},
+            {"role": "assistant", "content": "Summary of call 1."},
+        ]
+
+        engine.process_query("tell me more about the pricing")
+
+        # generate was called with history kwarg
+        call_kwargs = engine._llm.generate.call_args
+        assert call_kwargs.kwargs["history"] is not None
+        # History should contain the seeded exchange
+        assert any(
+            m["content"] == "summarise call 1"
+            for m in call_kwargs.kwargs["history"]
+        )
+
+    def test_history_preserves_order(self):
+        engine = self._make_engine_stub()
+        engine._llm.route_query.return_value = [
+            {"action": "list_calls", "query": ""},
+        ]
+        engine._store.list_calls.return_value = []
+
+        engine.process_query("alpha")
+        engine.process_query("beta")
+        engine.process_query("gamma")
+
+        contents = [m["content"] for m in engine._history if m["role"] == "user"]
+        assert contents == ["alpha", "beta", "gamma"]

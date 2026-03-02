@@ -12,11 +12,15 @@ from src.llm.prompts import SYSTEM_PROMPT, QA_PROMPT, SUMMARY_PROMPT, SENTIMENT_
 import config
 
 
+MAX_HISTORY_TURNS = 10  # keep last N user/assistant exchanges
+
+
 class ChatEngine:
     def __init__(self):
         self._store = VectorStore()
         self._retriever = Retriever(self._store)
         self._llm = LLMClient()
+        self._history: list[dict] = []  # conversation history for follow-ups
 
     # ── Ingestion ────────────────────────────────────────────────
 
@@ -86,14 +90,25 @@ class ChatEngine:
 
     def process_query(self, user_input: str) -> str:
         """Use LLM to classify intent, then route to the appropriate handler."""
-        actions = self._llm.route_query(user_input)
+        actions = self._llm.route_query(user_input, history=self._history)
 
         results = []
         for route in actions:
             result = self._execute_action(route)
             results.append(result)
 
-        return "\n\n".join(results)
+        response = "\n\n".join(results)
+
+        # Append this exchange to conversation history
+        self._history.append({"role": "user", "content": user_input})
+        self._history.append({"role": "assistant", "content": response})
+
+        # Trim history to the last N exchanges (each exchange = 2 messages)
+        max_messages = MAX_HISTORY_TURNS * 2
+        if len(self._history) > max_messages:
+            self._history = self._history[-max_messages:]
+
+        return response
 
     def _execute_action(self, route: dict) -> str:
         """Execute a single routed action."""
@@ -156,4 +171,6 @@ class ChatEngine:
         results = self._retriever.retrieve(query=query, top_k=top_k, call_id=call_id)
         context = self._retriever.format_context(results)
         user_prompt = prompt_template.format(context=context, query=query)
-        return self._llm.generate(SYSTEM_PROMPT, user_prompt)
+        return self._llm.generate(
+            SYSTEM_PROMPT, user_prompt, history=self._history
+        )
