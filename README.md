@@ -137,10 +137,24 @@ Each transcript is parsed into dialogue turns, then grouped into **overlapping c
 python -m pytest tests/ -v
 ```
 
-20 tests covering:
-- Transcript parsing (turn count, speaker/role extraction, timestamps, stage directions)
-- Chunking (overlap, token limits, metadata, edge cases)
-- Parser-chunker integration
+90 tests covering:
+
+| Area | Tests | Coverage |
+|------|-------|----------|
+| Parser basics | 6 | Turn count, call ID, duration, timestamps, text content, filename |
+| Speaker extraction | 5 | Named speakers, roles, shorthand, multi-speaker, participants |
+| `_parse_speaker` | 8 | Name+title, bare role, two-word role, CISO, stage directions |
+| `_extract_call_id` | 4 | Underscore, prefix, double-digit, no-number fallback |
+| `_infer_call_type` | 9 | All 4 types from filename + content, unknown fallback |
+| Speaker validation | 2 | Known roles pass, invalid speakers rejected |
+| Stage directions | 4 | Excluded from turns, collected separately, smiling/reads |
+| Edge cases | 3 | Empty file, single turn, call ID from single turn |
+| Real transcripts | 12 | All 4 sample files: parsing, participants, speakers |
+| Chunking | 13 | Overlap, no-overlap, large overlap, timing, speakers, metadata |
+| Retriever formatting | 4 | Empty, single, multiple results, relevance score |
+| Parser+chunker integration | 3 | End-to-end, type propagation, all turns covered |
+| Engine action routing | 13 | All 6 actions + edge cases + multi-action (mocked) |
+| Prompt templates | 4 | QA, summary, sentiment formatting, citation rules |
 
 ## Project Structure
 
